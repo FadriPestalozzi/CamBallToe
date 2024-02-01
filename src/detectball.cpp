@@ -200,6 +200,8 @@ int main(int argc, char *argv[]) {
 
   uint64_t last_ts = 0; // Used to check new frame arrival
 
+  int target_wall_defined = 0;
+
   // Infinite video grabbing loop
   while (1) {
 
@@ -322,6 +324,66 @@ int main(int argc, char *argv[]) {
                   << std::endl;
         // <---- Extract Depth map
 
+        // ----> define target wall
+        if (target_wall_defined == 0) {
+          // display left_rect
+          cv::namedWindow("Define Target Wall", cv::WINDOW_NORMAL);
+          cv::imshow("Define Target Wall", left_rect);
+
+          // Define a struct to hold the variables you need to access in the
+          // callback
+          struct CallbackData {
+            cv::UMat *left_rect;
+            std::vector<cv::Point> *points;
+          };
+
+          // Define a vector to store the points
+          std::vector<cv::Point> points;
+
+          // Create an instance of the struct and set the variables
+          CallbackData data;
+          data.left_rect = &left_rect;
+          data.points = &points;
+
+          // Define the callback function
+          auto callback = [](int event, int x, int y, int, void *userdata) {
+            // Cast userdata to CallbackData*
+            CallbackData *data = reinterpret_cast<CallbackData *>(userdata);
+
+            if (event == cv::EVENT_LBUTTONDOWN) {
+              data->points->push_back(cv::Point(x, y));
+
+              // Draw a large red X on the location that was clicked
+              cv::line(*data->left_rect, cv::Point(x - 10, y - 10),
+                       cv::Point(x + 10, y + 10), cv::Scalar(0, 0, 255), 2);
+              cv::line(*data->left_rect, cv::Point(x - 10, y + 10),
+                       cv::Point(x + 10, y - 10), cv::Scalar(0, 0, 255), 2);
+
+              // Update the image display
+              cv::imshow("Define Target Wall", *data->left_rect);
+            }
+          };
+
+          // Set the mouse callback function
+          cv::setMouseCallback("Define Target Wall", callback, &data);
+
+          // Wait for the user to define 3 points
+          while (points.size() < 3) {
+            cv::waitKey(1);
+
+            std::cout << "waiting for user input" << std::endl;
+          }
+
+          // Print the coordinates of the points
+          for (const cv::Point &point : points) {
+            std::cout << "Point: (" << point.x << ", " << point.y << ")"
+                      << std::endl;
+          }
+
+          target_wall_defined = 1;
+        }
+        // <---- define target wall
+
         // ----> Detect ball
         // tuning parameters
         int threshold_bin_min = 40;
@@ -388,7 +450,6 @@ int main(int argc, char *argv[]) {
                             .at<float>(center.y, center.x);
 
           // Print circle position, diameter and distance using left_disp_image
-          // xxx todo
           std::cout << "Circle " << i << " at (x,y,z) = (" << center.x << ", "
                     << center.y << ", " << depth << ") with diameter "
                     << diameter << std::endl;
@@ -435,9 +496,6 @@ int main(int argc, char *argv[]) {
 
         double pc_elapsed = stereo_clock.toc();
         std::stringstream pcElabInfo;
-        //            pcElabInfo << "Point cloud processing: " << pc_elapsed <<
-        //            " sec - Freq: " << 1./pc_elapsed;
-        // std::cout << pcElabInfo.str() << std::endl;
         // <---- Create Point Cloud
       }
 
@@ -483,17 +541,6 @@ int main(int argc, char *argv[]) {
       //     }
       //   }
     }
-
-    // // Sort the circles based on their frequency
-    // std::sort(circles.begin(), circles.end(),
-    //           [](const Circle &a, const Circle &b) {
-    //             return a.frequency > b.frequency;
-    //           });
-
-    // // The circle that is detected the most frequently is now the first
-    // element
-    // // in the vector
-    // Circle most_frequent_circle = circles[0];
 
     // // <---- frame buffer
 
