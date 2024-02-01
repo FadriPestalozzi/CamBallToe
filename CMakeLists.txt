@@ -291,3 +291,51 @@ if(BUILD_EXAMPLES)
         )
     endif()
 endif()
+
+############################################################################
+# Detect Ball
+set(SRC_DETECTBALL
+    ${PROJECT_SOURCE_DIR}/src/detectball.cpp
+)
+
+# Add a new executable target for detectball.cpp
+add_executable(${PROJECT_NAME}_detectball "${PROJECT_SOURCE_DIR}/src/detectball.cpp")
+
+# Set the properties for the new target
+set_target_properties(${PROJECT_NAME}_detectball PROPERTIES PREFIX "")
+
+# Link the necessary libraries to the new target
+target_link_libraries(${PROJECT_NAME}_detectball
+    ${PROJECT_NAME}
+    ${OpenCV_LIBS}
+    # Add any other necessary libraries here
+)
+
+# Install the new target
+install(TARGETS ${PROJECT_NAME}_detectball
+    RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/bin
+)
+
+############################################################################
+# Detect Ball Test
+set(SRC_DETECTBALL_Test
+    ${PROJECT_SOURCE_DIR}/src/detectball_test.cpp
+)
+
+# Add a new executable target for detectball.cpp
+add_executable(${PROJECT_NAME}_detectball_test "${PROJECT_SOURCE_DIR}/src/detectball_test.cpp")
+
+# Set the properties for the new target
+set_target_properties(${PROJECT_NAME}_detectball_test PROPERTIES PREFIX "")
+
+# Link the necessary libraries to the new target
+target_link_libraries(${PROJECT_NAME}_detectball_test
+    ${PROJECT_NAME}
+    ${OpenCV_LIBS}
+    # Add any other necessary libraries here
+)
+
+# Install the new target
+install(TARGETS ${PROJECT_NAME}_detectball_test
+    RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/bin
+)
