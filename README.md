@@ -17,14 +17,14 @@ User clicks onto 3 points to define playing wall.
 
 Get depth of 4 corner points = distance to origin of camera coordinate system. 
 
-![Alt text](image-2.png)
+![Alt text](images/depthcorners.png)
 
 
 ### ball detection
 
 After defining the playing wall, the ball position is detected in a continuous video stream from the ZED 2 camera. 
 
-![ball detected](image.png)
+![ball detected](images/detectball.png)
 
 
 ## ToDo
