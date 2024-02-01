@@ -10,12 +10,20 @@ Let's play tic tac toe using a football while the ball position is detected by a
 
 This code is based on [zed-open-capture](https://github.com/stereolabs/zed-open-capture)
 
-### Current Status
 
-- User clicks onto 3 points to define playing wall
-![Alt text](image-1.png)
+### define playing wall
 
-- A ball can be detected in an image taken by the ZED 2 camera
+User clicks onto 3 points to define playing wall. 
+
+Get depth of 4 corner points = distance to origin of camera coordinate system. 
+
+![Alt text](image-2.png)
+
+
+### ball detection
+
+After defining the playing wall, the ball position is detected in a continuous video stream from the ZED 2 camera. 
+
 ![ball detected](image.png)
 
 

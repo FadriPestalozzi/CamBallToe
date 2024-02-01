@@ -328,10 +328,13 @@ int main(int argc, char *argv[]) {
         // <---- Extract Depth map
 
         // ----> define target wall
-        if (target_wall_defined == 0) {
+        while (target_wall_defined == 0) {
           // display left_rect
           cv::namedWindow("Define Target Wall", cv::WINDOW_NORMAL);
           cv::imshow("Define Target Wall", left_rect);
+
+          //   store original left_rect if having to redo corners
+          cv::UMat left_rect_original = left_rect.clone();
 
           // Define a struct to hold the variables you need to access in the
           // callback
@@ -429,9 +432,44 @@ int main(int argc, char *argv[]) {
           //  update image with playing area
           cv::imshow("Define Target Wall", left_rect);
 
+          // ----> distance of 4 corners, top bottom left right
+          float bottomLeft_depth = left_depth_map.getMat(cv::ACCESS_READ)
+                                       .at<float>(bottomLeft.x, bottomLeft.y);
+          float bottomRight_depth =
+              left_depth_map.getMat(cv::ACCESS_READ)
+                  .at<float>(bottomRight.x, bottomRight.y);
+          float topRight_depth = left_depth_map.getMat(cv::ACCESS_READ)
+                                     .at<float>(topRight.x, topRight.y);
+          float topLeft_depth = left_depth_map.getMat(cv::ACCESS_READ)
+                                    .at<float>(topLeft.x, topLeft.y);
+
+          // Check if any depth value is negative
+          if (bottomLeft_depth < 0 || bottomRight_depth < 0 ||
+              topRight_depth < 0 || topLeft_depth < 0) {
+            std::cout << "Negative depth value detected, skipping frame..."
+                      << std::endl;
+
+            //  use left_rect_original to overwrite left_rect
+            left_rect = left_rect_original.clone();
+
+            // clear image to redo corner definition
+            cv::imshow("Define Target Wall", left_rect);
+
+            continue; // continue with the next frame to redo corners
+          }
+          std::cout << "Depth of the bottom left corner: " << bottomLeft_depth
+                    << " mm" << std::endl;
+          std::cout << "Depth of the bottom right corner: " << bottomRight_depth
+                    << " mm" << std::endl;
+          std::cout << "Depth of the top right corner: " << topRight_depth
+                    << " mm" << std::endl;
+          std::cout << "Depth of the top left corner: " << topLeft_depth
+                    << " mm" << std::endl;
+          // <---- distance of 4 corners
+
           target_wall_defined = 1;
+          // <---- define target wall
         }
-        // <---- define target wall
 
         // ----> Detect ball
         // tuning parameters
@@ -509,7 +547,7 @@ int main(int argc, char *argv[]) {
           cv::circle(left_rect, center, radius, cv::Scalar(0, 0, 255),
                      line_thickness, line_type, 0);
 
-          // Show the original image with the circle
+          // Show the image, now including the detected circle
           sl_oc::tools::showImage("Left rect.", left_rect, params.res, true,
                                   remapElabInfo.str());
         }
