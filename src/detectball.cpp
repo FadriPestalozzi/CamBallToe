@@ -203,217 +203,299 @@ int main(int argc, char *argv[]) {
   // Infinite video grabbing loop
   while (1) {
 
-    // Get a new frame from camera
-    const sl_oc::video::Frame frame = cap.getLastFrame();
+    // ----> frame buffer
 
-    // ----> If the frame is valid we can convert, rectify and display it
-    if (frame.data != nullptr && frame.timestamp != last_ts) {
-      last_ts = frame.timestamp;
+    // buffer to store circles from several frames to find ball
+    std::vector<cv::Vec3f> left_circles_frames;
+    int n_buffer_frames = 10;
 
-      // ----> Conversion from YUV 4:2:2 to BGR for visualization
+    // fill buffer to detect circle
+    for (int i = 0; i < n_buffer_frames; i++) {
+
+      // Get a new frame from camera
+      const sl_oc::video::Frame frame = cap.getLastFrame();
+
+      // ----> If the frame is valid we can convert, rectify and display it
+      if (frame.data != nullptr && frame.timestamp != last_ts) {
+        last_ts = frame.timestamp;
+
+        // ----> Conversion from YUV 4:2:2 to BGR for visualization
 #ifdef USE_OCV_TAPI
-      cv::Mat frameYUV_cpu =
-          cv::Mat(frame.height, frame.width, CV_8UC2, frame.data);
-      frameYUV =
-          frameYUV_cpu.getUMat(cv::ACCESS_READ, cv::USAGE_ALLOCATE_HOST_MEMORY);
+        cv::Mat frameYUV_cpu =
+            cv::Mat(frame.height, frame.width, CV_8UC2, frame.data);
+        frameYUV = frameYUV_cpu.getUMat(cv::ACCESS_READ,
+                                        cv::USAGE_ALLOCATE_HOST_MEMORY);
 #else
-      frameYUV = cv::Mat(frame.height, frame.width, CV_8UC2, frame.data);
+        frameYUV = cv::Mat(frame.height, frame.width, CV_8UC2, frame.data);
 #endif
-      cv::cvtColor(frameYUV, frameBGR, cv::COLOR_YUV2BGR_YUYV);
-      // <---- Conversion from YUV 4:2:2 to BGR for visualization
+        cv::cvtColor(frameYUV, frameBGR, cv::COLOR_YUV2BGR_YUYV);
+        // <---- Conversion from YUV 4:2:2 to BGR for visualization
 
-      // ----> Extract left and right images from side-by-side
-      left_raw = frameBGR(cv::Rect(0, 0, frameBGR.cols / 2, frameBGR.rows));
-      right_raw = frameBGR(
-          cv::Rect(frameBGR.cols / 2, 0, frameBGR.cols / 2, frameBGR.rows));
-      // <---- Extract left and right images from side-by-side
+        // ----> Extract left and right images from side-by-side
+        left_raw = frameBGR(cv::Rect(0, 0, frameBGR.cols / 2, frameBGR.rows));
+        right_raw = frameBGR(
+            cv::Rect(frameBGR.cols / 2, 0, frameBGR.cols / 2, frameBGR.rows));
+        // <---- Extract left and right images from side-by-side
 
-      // ----> Apply rectification
-      sl_oc::tools::StopWatch remap_clock;
+        // ----> Apply rectification
+        sl_oc::tools::StopWatch remap_clock;
 #ifdef USE_OCV_TAPI
-      cv::remap(left_raw, left_rect, map_left_x_gpu, map_left_y_gpu,
-                cv::INTER_AREA);
-      cv::remap(right_raw, right_rect, map_right_x_gpu, map_right_y_gpu,
-                cv::INTER_AREA);
+        cv::remap(left_raw, left_rect, map_left_x_gpu, map_left_y_gpu,
+                  cv::INTER_AREA);
+        cv::remap(right_raw, right_rect, map_right_x_gpu, map_right_y_gpu,
+                  cv::INTER_AREA);
 #else
-      cv::remap(left_raw, left_rect, map_left_x, map_left_y, cv::INTER_AREA);
-      cv::remap(right_raw, right_rect, map_right_x, map_right_y,
-                cv::INTER_AREA);
+        cv::remap(left_raw, left_rect, map_left_x, map_left_y, cv::INTER_AREA);
+        cv::remap(right_raw, right_rect, map_right_x, map_right_y,
+                  cv::INTER_AREA);
 #endif
-      double remap_elapsed = remap_clock.toc();
-      std::stringstream remapElabInfo;
-      remapElabInfo << "Rectif. processing: " << remap_elapsed
-                    << " sec - Freq: " << 1. / remap_elapsed;
-      // <---- Apply rectification
+        double remap_elapsed = remap_clock.toc();
+        std::stringstream remapElabInfo;
+        remapElabInfo << "Rectif. processing: " << remap_elapsed
+                      << " sec - Freq: " << 1. / remap_elapsed;
+        // <---- Apply rectification
 
-      // ----> Stereo matching
-      sl_oc::tools::StopWatch stereo_clock;
-      double resize_fact = 1.0;
+        // ----> Stereo matching
+        sl_oc::tools::StopWatch stereo_clock;
+        double resize_fact = 1.0;
 #ifdef USE_HALF_SIZE_DISP
-      resize_fact = 0.5;
-      // Resize the original images to improve performances
-      cv::resize(left_rect, left_for_matcher, cv::Size(), resize_fact,
-                 resize_fact, cv::INTER_AREA);
-      cv::resize(right_rect, right_for_matcher, cv::Size(), resize_fact,
-                 resize_fact, cv::INTER_AREA);
+        resize_fact = 0.5;
+        // Resize the original images to improve performances
+        cv::resize(left_rect, left_for_matcher, cv::Size(), resize_fact,
+                   resize_fact, cv::INTER_AREA);
+        cv::resize(right_rect, right_for_matcher, cv::Size(), resize_fact,
+                   resize_fact, cv::INTER_AREA);
 #else
-      left_for_matcher = left_rect;   // No data copy
-      right_for_matcher = right_rect; // No data copy
+        left_for_matcher = left_rect;   // No data copy
+        right_for_matcher = right_rect; // No data copy
 #endif
-      // Apply stereo matching
-      left_matcher->compute(left_for_matcher, right_for_matcher,
-                            left_disp_half);
+        // Apply stereo matching
+        left_matcher->compute(left_for_matcher, right_for_matcher,
+                              left_disp_half);
 
-      left_disp_half.convertTo(left_disp_float, CV_32FC1);
-      cv::multiply(
-          left_disp_float, 1. / 16.,
-          left_disp_float); // Last 4 bits of SGBM disparity are decimal
+        left_disp_half.convertTo(left_disp_float, CV_32FC1);
+        cv::multiply(
+            left_disp_float, 1. / 16.,
+            left_disp_float); // Last 4 bits of SGBM disparity are decimal
 
 #ifdef USE_HALF_SIZE_DISP
-      cv::multiply(
-          left_disp_float, 2.,
-          left_disp_float); // Last 4 bits of SGBM disparity are decimal
-      cv::UMat tmp = left_disp_float; // Required for OpenCV 3.2
-      cv::resize(tmp, left_disp_float, cv::Size(), 1. / resize_fact,
-                 1. / resize_fact, cv::INTER_AREA);
+        cv::multiply(
+            left_disp_float, 2.,
+            left_disp_float); // Last 4 bits of SGBM disparity are decimal
+        cv::UMat tmp = left_disp_float; // Required for OpenCV 3.2
+        cv::resize(tmp, left_disp_float, cv::Size(), 1. / resize_fact,
+                   1. / resize_fact, cv::INTER_AREA);
 #else
-      left_disp = left_disp_float;
+        left_disp = left_disp_float;
 #endif
 
-      double elapsed = stereo_clock.toc();
-      std::stringstream stereoElabInfo;
-      stereoElabInfo << "Stereo processing: " << elapsed
-                     << " sec - Freq: " << 1. / elapsed;
-      // <---- Stereo matching
+        double elapsed = stereo_clock.toc();
+        std::stringstream stereoElabInfo;
+        stereoElabInfo << "Stereo processing: " << elapsed
+                       << " sec - Freq: " << 1. / elapsed;
+        // <---- Stereo matching
 
-      // ----> Show disparity image
-      cv::add(left_disp_float, -static_cast<double>(stereoPar.minDisparity - 1),
-              left_disp_float); // Minimum disparity offset correction
-      cv::multiply(left_disp_float, 1. / stereoPar.numDisparities,
-                   left_disp_image, 255.,
-                   CV_8UC1); // Normalization and rescaling
+        // ----> Show disparity image
+        cv::add(left_disp_float,
+                -static_cast<double>(stereoPar.minDisparity - 1),
+                left_disp_float); // Minimum disparity offset correction
+        cv::multiply(left_disp_float, 1. / stereoPar.numDisparities,
+                     left_disp_image, 255.,
+                     CV_8UC1); // Normalization and rescaling
 
-      cv::applyColorMap(left_disp_image, left_disp_image, cv::COLORMAP_INFERNO);
-      // <---- Show disparity image
+        cv::applyColorMap(left_disp_image, left_disp_image,
+                          cv::COLORMAP_INFERNO);
+        // <---- Show disparity image
 
-      // ----> Extract Depth map
-      // The DISPARITY MAP can be now transformed in DEPTH MAP using the formula
-      // depth = (f * B) / disparity
-      // where 'f' is the camera focal, 'B' is the camera baseline, 'disparity'
-      // is the pixel disparity
+        // ----> Extract Depth map
+        // The DISPARITY MAP can be now transformed in DEPTH MAP using the
+        // formula depth = (f * B) / disparity where 'f' is the camera focal,
+        // 'B' is the camera baseline, 'disparity' is the pixel disparity
 
-      double num = static_cast<double>(fx * baseline);
-      cv::divide(num, left_disp_float, left_depth_map);
+        double num = static_cast<double>(fx * baseline);
+        cv::divide(num, left_disp_float, left_depth_map);
 
-      float central_depth =
-          left_depth_map.getMat(cv::ACCESS_READ)
-              .at<float>(left_depth_map.rows / 2, left_depth_map.cols / 2);
-      std::cout << "Depth of the central pixel: " << central_depth << " mm"
-                << std::endl;
-      // <---- Extract Depth map
+        float central_depth =
+            left_depth_map.getMat(cv::ACCESS_READ)
+                .at<float>(left_depth_map.rows / 2, left_depth_map.cols / 2);
+        std::cout << "Depth of the central pixel: " << central_depth << " mm"
+                  << std::endl;
+        // <---- Extract Depth map
 
-      // ----> Detect ball
-      // Convert image to grayscale
-      cv::Mat left_gray;
-      cv::Mat right_gray;
-      cv::cvtColor(right_rect, right_gray, cv::COLOR_BGR2GRAY);
-      cv::cvtColor(left_rect, left_gray, cv::COLOR_BGR2GRAY);
+        // ----> Detect ball
+        // tuning parameters
+        int threshold_bin_min = 40;
+        int threshold_bin_max = 255;
+        int threshold_diameter_min = 0;
+        int threshold_diameter_max = 0;
+        int HoughCircles_EdgeDetect =
+            100; // usually 100-200, lower = more edges detected
+        int HoughCircles_CircleDetect =
+            35; // usually 20-100, lower = more circles detected
+        int GaussianBlur_kernel = 9; // 9 size of Gaussian kernel
+        int GaussianBlur_std = 2; // 2 standard deviation in X and Y directions
 
-      // Apply a binary threshold to the grayscale image
-      cv::Mat left_gray_bin;
-      cv::threshold(left_gray, left_gray_bin, 60, 255, cv::THRESH_BINARY);
-      //   cv::imshow("left_gray_bin", left_gray_bin);
+        // Convert image to grayscale
+        cv::Mat left_gray;
+        cv::Mat right_gray;
+        cv::cvtColor(right_rect, right_gray, cv::COLOR_BGR2GRAY);
+        cv::cvtColor(left_rect, left_gray, cv::COLOR_BGR2GRAY);
 
-      // Define the minimum and maximum pixel diameter of the ball
-      int min_diameter = 0;
-      int max_diameter = 0;
+        // Apply a binary threshold to the grayscale image
+        cv::Mat left_bin;
+        cv::threshold(left_gray, left_bin, threshold_bin_min, threshold_bin_max,
+                      cv::THRESH_BINARY);
 
-      // Convert the pixel diameters to radii
-      int min_radius = min_diameter / 2;
-      int max_radius = max_diameter / 2;
+        // Blur the binary grayscale image
+        cv::Mat left_blurred;
+        cv::GaussianBlur(left_bin, left_blurred,
+                         cv::Size(GaussianBlur_kernel, GaussianBlur_kernel),
+                         GaussianBlur_std, GaussianBlur_std);
 
-      // Use the Hough Circle Transform to detect circles in the binary image
-      // circle = (x, y, radius)
-      int HoughCircles_EdgeDetect =
-          100; // usually 100-200, lower = more edges detected
-      int HoughCircles_CircleDetect =
-          30; // usually 20-100, lower = more circles detected
-      std::vector<cv::Vec3f> left_circles;
-      cv::HoughCircles(left_gray_bin, left_circles, cv::HOUGH_GRADIENT, 1,
-                       left_gray_bin.rows / 8, HoughCircles_EdgeDetect,
-                       HoughCircles_CircleDetect, min_radius, max_radius);
+        // Convert the pixel diameters to radii
+        int radius_min = threshold_diameter_min / 2;
+        int radius_max = threshold_diameter_max / 2;
 
-      // find circle and calculate its depth using the depth map
-      for (size_t i = 0; i < left_circles.size(); i++) {
-        cv::Point center(cvRound(left_circles[i][0]),
-                         cvRound(left_circles[i][1]));
-        int radius = cvRound(left_circles[i][2]);
+        // detect circles (x, y, radius) by using
+        // Hough Circle Transform of binary image
+        std::vector<cv::Vec3f> left_circles;
+        cv::HoughCircles(left_blurred, left_circles, cv::HOUGH_GRADIENT, 1,
+                         left_blurred.rows / 8, HoughCircles_EdgeDetect,
+                         HoughCircles_CircleDetect, radius_min, radius_max);
 
-        // Calculate the pixel diameter of the football
-        int diameter = radius * 2;
+        // find circle and calculate its depth using the depth map
+        for (size_t i = 0; i < left_circles.size(); i++) {
+          cv::Point center(cvRound(left_circles[i][0]),
+                           cvRound(left_circles[i][1]));
+          int radius = cvRound(left_circles[i][2]);
 
-        // Check if the region of interest (ROI) is within the image boundaries
-        // ignore if ball is not completely inside the image
-        if (center.x - radius < 0 || center.y - radius < 0 ||
-            center.x + radius >= left_depth_map.cols ||
-            center.y + radius >= left_depth_map.rows) {
-          std::cout << "Skipping circle " << i
-                    << " because it's outside the image boundaries"
-                    << std::endl;
-          continue;
+          // Calculate the pixel diameter of the circle
+          int diameter = radius * 2;
+
+          // Check if the region of interest (ROI) is within the image
+          // boundaries ignore if ball is not completely inside the image
+          if (center.x - radius < 0 || center.y - radius < 0 ||
+              center.x + radius >= left_depth_map.cols ||
+              center.y + radius >= left_depth_map.rows) {
+            std::cout << "Skipping circle " << i
+                      << " because it's outside the image boundaries"
+                      << std::endl;
+            continue;
+          }
+
+          // using left_depth_map get depth at circle position x,y
+          float depth = left_depth_map.getMat(cv::ACCESS_READ)
+                            .at<float>(center.y, center.x);
+
+          // Print circle position, diameter and distance using left_disp_image
+          // xxx todo
+          std::cout << "Circle " << i << " at (x,y,z) = (" << center.x << ", "
+                    << center.y << ", " << depth << ") with diameter "
+                    << diameter << std::endl;
+
+          // Draw the circle on the original image
+          int line_thickness = 5; // [pixels]
+          int line_type = 8;      // 8-connected line
+          cv::circle(left_rect, center, radius, cv::Scalar(0, 0, 255),
+                     line_thickness, line_type, 0);
+
+          // Show the original image with the circle
+          sl_oc::tools::showImage("Left rect.", left_rect, params.res, true,
+                                  remapElabInfo.str());
         }
 
-        // Print the x-y-positions and pixel diameter of the circle
-        std::cout << "Circle " << i << " at (x,y) = (" << center.x << ", "
-                  << center.y << ") with diameter " << diameter << std::endl;
+        // <---- Detect ball
 
-        // Draw the circle on the original image
-        int line_thickness = 10; // [pixels]
-        int line_type = 8;       // 8-connected line
-        cv::circle(left_rect, center, radius, cv::Scalar(0, 0, 255),
-                   line_thickness, line_type, 0);
-
-        // Show the original image with the circle
-        sl_oc::tools::showImage("Left rect.", left_rect, params.res, true,
-                                remapElabInfo.str());
-      }
-
-      // <---- Detect ball
-
-      // ----> Create Point Cloud
-      sl_oc::tools::StopWatch pc_clock;
-      size_t buf_size =
-          static_cast<size_t>(left_depth_map.cols * left_depth_map.rows);
-      std::vector<cv::Vec3d> buffer(
-          buf_size, cv::Vec3f::all(std::numeric_limits<float>::quiet_NaN()));
-      cv::Mat depth_map_cpu = left_depth_map.getMat(cv::ACCESS_READ);
-      float *depth_vec = (float *)(&(depth_map_cpu.data[0]));
+        // ----> Create Point Cloud
+        sl_oc::tools::StopWatch pc_clock;
+        size_t buf_size =
+            static_cast<size_t>(left_depth_map.cols * left_depth_map.rows);
+        std::vector<cv::Vec3d> buffer(
+            buf_size, cv::Vec3f::all(std::numeric_limits<float>::quiet_NaN()));
+        cv::Mat depth_map_cpu = left_depth_map.getMat(cv::ACCESS_READ);
+        float *depth_vec = (float *)(&(depth_map_cpu.data[0]));
 
 #pragma omp parallel for
-      for (size_t idx = 0; idx < buf_size; idx++) {
-        size_t r = idx / left_depth_map.cols;
-        size_t c = idx % left_depth_map.cols;
-        double depth = static_cast<double>(depth_vec[idx]);
-        // std::cout << depth << " ";
-        if (!isinf(depth) && depth >= 0 && depth > stereoPar.minDepth_mm &&
-            depth < stereoPar.maxDepth_mm) {
-          buffer[idx].val[2] = depth;                 // Z
-          buffer[idx].val[0] = (c - cx) * depth / fx; // X
-          buffer[idx].val[1] = (r - cy) * depth / fy; // Y
+        for (size_t idx = 0; idx < buf_size; idx++) {
+          size_t r = idx / left_depth_map.cols;
+          size_t c = idx % left_depth_map.cols;
+          double depth = static_cast<double>(depth_vec[idx]);
+          // std::cout << depth << " ";
+          if (!isinf(depth) && depth >= 0 && depth > stereoPar.minDepth_mm &&
+              depth < stereoPar.maxDepth_mm) {
+            buffer[idx].val[2] = depth;                 // Z
+            buffer[idx].val[0] = (c - cx) * depth / fx; // X
+            buffer[idx].val[1] = (r - cy) * depth / fy; // Y
+          }
         }
+
+        cloudMat = cv::Mat(left_depth_map.rows, left_depth_map.cols, CV_64FC3,
+                           &buffer[0])
+                       .clone();
+
+        double pc_elapsed = stereo_clock.toc();
+        std::stringstream pcElabInfo;
+        //            pcElabInfo << "Point cloud processing: " << pc_elapsed <<
+        //            " sec - Freq: " << 1./pc_elapsed;
+        // std::cout << pcElabInfo.str() << std::endl;
+        // <---- Create Point Cloud
       }
 
-      cloudMat = cv::Mat(left_depth_map.rows, left_depth_map.cols, CV_64FC3,
-                         &buffer[0])
-                     .clone();
+      //   sl::Mat image_zed;
+      //   zed.retrieveImage(image_zed, sl::VIEW::LEFT);
+      //   cv::Mat image_cv = sl::toCvMat(image_zed);
 
-      double pc_elapsed = stereo_clock.toc();
-      std::stringstream pcElabInfo;
-      //            pcElabInfo << "Point cloud processing: " << pc_elapsed <<
-      //            " sec - Freq: " << 1./pc_elapsed;
-      // std::cout << pcElabInfo.str() << std::endl;
-      // <---- Create Point Cloud
+      //   // Convert the image to grayscale
+      //   cv::Mat gray;
+      //   cv::cvtColor(image_cv, gray, cv::COLOR_BGR2GRAY);
+
+      //   // Detect circles in the grayscale image
+      //   std::vector<cv::Vec3f> detected_circles;
+      //   cv::HoughCircles(gray, detected_circles, cv::HOUGH_GRADIENT, 1,
+      //                    gray.rows / 8, 200, 100, 0, 0);
+
+      //   // For each detected circle, check if it overlaps with an existing
+      //   circle for (size_t j = 0; j < detected_circles.size(); j++) {
+      //     cv::Point center(cvRound(detected_circles[j][0]),
+      //                      cvRound(detected_circles[j][1]));
+      //     int radius = cvRound(detected_circles[j][2]);
+
+      //     bool found = false;
+      //     for (Circle &circle : circles) {
+      //       // Calculate the distance between the centers of the two circles
+      //       double distance = cv::norm(circle.center - center);
+
+      //       // If the circles overlap more than 90%, increment the frequency
+      //       of
+      //       // the existing circle
+      //       if (distance < 1.1 * (circle.radius + radius)) {
+      //         circle.frequency++;
+      //         found = true;
+      //         break;
+      //       }
+      //     }
+
+      //     // If the circle does not overlap with any existing circle, add it
+      //     to
+      //     // the vector
+      //     if (!found) {
+      //       circles.push_back({center, radius, 1});
+      //     }
+      //   }
     }
+
+    // // Sort the circles based on their frequency
+    // std::sort(circles.begin(), circles.end(),
+    //           [](const Circle &a, const Circle &b) {
+    //             return a.frequency > b.frequency;
+    //           });
+
+    // // The circle that is detected the most frequently is now the first
+    // element
+    // // in the vector
+    // Circle most_frequent_circle = circles[0];
+
+    // // <---- frame buffer
 
     // ----> Keyboard handling
     int key = cv::waitKey(5);
