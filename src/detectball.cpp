@@ -50,6 +50,9 @@
 #define USE_HALF_SIZE_DISP // Comment to compute depth matching on full image
                            // frames
 
+// Define a no-op mouse callback function
+void noop(int event, int x, int y, int flags, void *userdata) {}
+
 int main(int argc, char *argv[]) {
   // ----> Silence unused warning
   (void)argc;
@@ -346,7 +349,8 @@ int main(int argc, char *argv[]) {
           data.points = &points;
 
           // Define the callback function
-          auto callback = [](int event, int x, int y, int, void *userdata) {
+          auto MouseCallback = [](int event, int x, int y, int,
+                                  void *userdata) {
             // Cast userdata to CallbackData*
             CallbackData *data = reinterpret_cast<CallbackData *>(userdata);
 
@@ -364,21 +368,66 @@ int main(int argc, char *argv[]) {
             }
           };
 
+          // Define the points
+          cv::Point bottomLeft, bottomRight, topRight;
+
           // Set the mouse callback function
-          cv::setMouseCallback("Define Target Wall", callback, &data);
+          cv::setMouseCallback("Define Target Wall", MouseCallback, &data);
 
-          // Wait for the user to define 3 points
-          while (points.size() < 3) {
+          // Get the bottom left point
+          std::cout
+              << "Left click on the bottom left corner of the playing wall"
+              << std::endl;
+          while (points.empty()) {
             cv::waitKey(1);
-
-            std::cout << "waiting for user input" << std::endl;
           }
+          bottomLeft = points.back();
+          points.clear();
+
+          // Get the bottom right point
+          std::cout
+              << "Left click on the bottom right corner of the playing wall"
+              << std::endl;
+          while (points.empty()) {
+            cv::waitKey(1);
+          }
+          bottomRight = points.back();
+          points.clear();
+
+          // Get the top right point
+          std::cout << "Left click on the top right corner of the playing wall"
+                    << std::endl;
+          while (points.empty()) {
+            cv::waitKey(1);
+          }
+          topRight = points.back();
+          points.clear();
+
+          // Deactivate the mouse callback function
+          cv::setMouseCallback("Define Target Wall", noop, nullptr);
 
           // Print the coordinates of the points
-          for (const cv::Point &point : points) {
-            std::cout << "Point: (" << point.x << ", " << point.y << ")"
-                      << std::endl;
-          }
+          std::cout << "Bottom Left: (" << bottomLeft.x << ", " << bottomLeft.y
+                    << ")" << std::endl;
+          std::cout << "Bottom Right: (" << bottomRight.x << ", "
+                    << bottomRight.y << ")" << std::endl;
+          std::cout << "Top Right: (" << topRight.x << ", " << topRight.y << ")"
+                    << std::endl;
+
+          //   get missing corner of parallelogram
+          cv::Point topLeft;
+          topLeft.x = bottomLeft.x + (topRight.x - bottomRight.x);
+          topLeft.y = bottomLeft.y + (topRight.y - bottomRight.y);
+
+          //   draw target playing wall
+          cv::line(left_rect, bottomLeft, bottomRight, cv::Scalar(0, 0, 255),
+                   2);
+          cv::line(left_rect, bottomRight, topRight, cv::Scalar(0, 0, 255), 2);
+          cv::line(left_rect, topRight, topLeft, cv::Scalar(0, 0, 255), 2);
+          cv::line(left_rect, topLeft, bottomLeft, cv::Scalar(0, 0, 255), 2);
+
+          //  update image with playing area
+          cv::imshow("Define Target Wall", left_rect);
 
           target_wall_defined = 1;
         }
@@ -498,48 +547,6 @@ int main(int argc, char *argv[]) {
         std::stringstream pcElabInfo;
         // <---- Create Point Cloud
       }
-
-      //   sl::Mat image_zed;
-      //   zed.retrieveImage(image_zed, sl::VIEW::LEFT);
-      //   cv::Mat image_cv = sl::toCvMat(image_zed);
-
-      //   // Convert the image to grayscale
-      //   cv::Mat gray;
-      //   cv::cvtColor(image_cv, gray, cv::COLOR_BGR2GRAY);
-
-      //   // Detect circles in the grayscale image
-      //   std::vector<cv::Vec3f> detected_circles;
-      //   cv::HoughCircles(gray, detected_circles, cv::HOUGH_GRADIENT, 1,
-      //                    gray.rows / 8, 200, 100, 0, 0);
-
-      //   // For each detected circle, check if it overlaps with an existing
-      //   circle for (size_t j = 0; j < detected_circles.size(); j++) {
-      //     cv::Point center(cvRound(detected_circles[j][0]),
-      //                      cvRound(detected_circles[j][1]));
-      //     int radius = cvRound(detected_circles[j][2]);
-
-      //     bool found = false;
-      //     for (Circle &circle : circles) {
-      //       // Calculate the distance between the centers of the two circles
-      //       double distance = cv::norm(circle.center - center);
-
-      //       // If the circles overlap more than 90%, increment the frequency
-      //       of
-      //       // the existing circle
-      //       if (distance < 1.1 * (circle.radius + radius)) {
-      //         circle.frequency++;
-      //         found = true;
-      //         break;
-      //       }
-      //     }
-
-      //     // If the circle does not overlap with any existing circle, add it
-      //     to
-      //     // the vector
-      //     if (!found) {
-      //       circles.push_back({center, radius, 1});
-      //     }
-      //   }
     }
 
     // // <---- frame buffer

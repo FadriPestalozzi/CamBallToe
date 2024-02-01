@@ -13,13 +13,15 @@ This code is based on [zed-open-capture](https://github.com/stereolabs/zed-open-
 ### Current Status
 
 - User clicks onto 3 points to define playing wall
+![Alt text](image-1.png)
+
 - A ball can be detected in an image taken by the ZED 2 camera
 ![ball detected](image.png)
 
 
 ## ToDo
 
-- [ ] draw target playing wall
+- [x] draw target playing wall
 - [ ] detect wall distance
 - [ ] using ball diameter and safety margin, detect when ball hits wall
 
@@ -56,7 +58,7 @@ This code is based on [zed-open-capture](https://github.com/stereolabs/zed-open-
 ### Clone the repository
 
 ```bash
-git clone https://github.com/FadriPestalozzi/zed-open-capture
+git clone https://github.com/FadriPestalozzi/CamBallToe
 cd zed-open-capture
 ```
 
