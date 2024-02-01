@@ -1,14 +1,14 @@
 
 # CamBallToe
 
-The Brazilian version of the popular game TicTacToe - using a football and the playing wall of your choice. 
+The Brazilian version of the popular game TicTacToe - using a Camera, a footBall and the Toe of your choice. 
 
 
 ## Description
 
-Let's play tic tac toe using a football while the ball position is detected by a camera. 
+Let's play tic tac toe by shooting a football onto 9 wall segments while detecting our hits with a camera. 
 
-This code is based on [zed-open-capture](https://github.com/stereolabs/zed-open-capture)
+This project code is based on [zed-open-capture](https://github.com/stereolabs/zed-open-capture). 
 
 
 ### define playing wall
@@ -30,8 +30,10 @@ After defining the playing wall, the ball position is detected in a continuous v
 ## ToDo
 
 - [x] draw target playing wall
-- [ ] detect wall distance
-- [ ] using ball diameter and safety margin, detect when ball hits wall
+- [x] detect wall distance
+- [ ] divide wall into 9 marking areas
+- [ ] detect if ball in a marking area
+- [ ] if ball in marking area and distance of ball center close to wall distance = hit 
 
 
 
