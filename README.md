@@ -29,8 +29,12 @@ After defining the playing wall, the ball position is detected in a continuous v
 
 ## ToDo
 
+- [x] detect ball
 - [x] draw target playing wall
 - [x] detect wall distance
+- [ ] define wall coordinate system with x-y-origin at wall center and z axis pointing away from the wall towards the camera (inverted from z_camera)
+- [ ] get transformation matrix from camera to wall coordinate system
+- [ ] transform ball coordinates from camera to wall coordinate system
 - [ ] divide wall into 9 marking areas
 - [ ] detect if ball in a marking area
 - [ ] if ball in marking area and distance of ball center close to wall distance = hit 
